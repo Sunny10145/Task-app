@@ -1,1 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tasks Done</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      padding: 10px;
+      background-color: #f9fafb;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: #2c3e50;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    input, select {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+      min-width: 150px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 6px rgb(0 0 0 / 0.1);
+      background: white;
+    }
+    th, td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    th {
+      cursor: pointer;
+      background: #34495e;
+      color: white;
+      user-select: none;
+      position: relative;
+    }
+    th.sort-asc::after {
+      content: "▲";
+      position: absolute;
+      right: 8px;
+    }
+    th.sort-desc::after {
+      content: "▼";
+      position: absolute;
+      right: 8px;
+    }
+    tr:hover {
+      background-color: #f1f6fb;
+    }
+    a {
+      color: #2980b9;
+      text-decoration: underline;
+      word-break: break-word;
+    }
+    @media (max-width: 768px) {
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      th, td {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Tasks Done</h1>
 
+  <div class="filters">
+    <input type="text" id="searchTaskPlan" placeholder="Search Task..." />
+    <input type="text" id="filterDoer" placeholder="Filter by Doer's Name" />
+    <select id="filterFreq">
+      <option value="">Filter by Frequency</option>
+    </select>
+    <input type="date" id="filterDate" />
+  </div>
+
+  <table id="tasksTable">
+    <thead>
+      <tr>
+        <th data-column="Doer's Name">Doer's Name</th>
+        <th data-column="Frequency">Frequency</th>
+        <th data-column="Task">Task</th>
+        <th data-column="Date">Date</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let tasksData = [];
+    let filteredData = [];
+    let currentSortColumn = null;
+    let sortDirectionAsc = true;
+
+    function sortByKey(array, key, asc) {
+      return array.sort((a, b) => {
+        let valA = a[key] || "";
+        let valB = b[key] || "";
+        if(key === "Date") {
+          valA = valA ? new Date(valA.split('-').reverse().join('-')) : new Date(0);
+          valB = valB ? new Date(valB.split('-').reverse().join('-')) : new Date(0);
+        } else {
+          valA = valA.toString().toLowerCase();
+          valB = valB.toString().toLowerCase();
+        }
+        if(valA < valB) return asc ? -1 : 1;
+        if(valA > valB) return asc ? 1 : -1;
+        return 0;
+      });
+    }
+
+    function renderTable(data) {
+      const tbody = document.querySelector("#tasksTable tbody");
+      tbody.innerHTML = "";
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:1rem;">No matching tasks found.</td></tr>';
+        return;
+      }
+
+      data.forEach(task => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${task["Doer's Name"] || ""}</td>
+          <td>${task.Frequency || ""}</td>
+          <td>${task.Task || ""}</td>
+          <td>${task.Date || ""}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function populateFreqOptions(data) {
+      const freqSet = new Set();
+      data.forEach(task => {
+        if(task.Frequency) freqSet.add(task.Frequency);
+      });
+      const select = document.getElementById("filterFreq");
+      select.innerHTML = '<option value="">Filter by Frequency</option>';
+      freqSet.forEach(freq => {
+        const option = document.createElement("option");
+        option.value = freq;
+        option.textContent = freq;
+        select.appendChild(option);
+      });
+    }
+
+    function filterData() {
+      const doerFilter = document.getElementById("filterDoer").value.toLowerCase();
+      const freqFilter = document.getElementById("filterFreq").value;
+      const dateFilter = document.getElementById("filterDate").value;
+      const searchTerm = document.getElementById("searchTaskPlan").value.toLowerCase();
+
+      filteredData = tasksData.filter(task => {
+        if(doerFilter && !task["Doer's Name"].toLowerCase().includes(doerFilter)) return false;
+        if(freqFilter && task.Frequency !== freqFilter) return false;
+        if(dateFilter && task.Date !== dateFilter.split('-').reverse().join('-')) return false;
+        if(searchTerm && !task.Task.toLowerCase().includes(searchTerm)) return false;
+        return true;
+      });
+
+      if(currentSortColumn) {
+        filteredData = sortByKey(filteredData, currentSortColumn, sortDirectionAsc);
+      }
+
+      renderTable(filteredData);
+    }
+
+    function onHeaderClick(e) {
+      const col = e.target.getAttribute("data-column");
+      if(!col) return;
+
+      if(currentSortColumn === col){
+        sortDirectionAsc = !sortDirectionAsc;
+      } else {
+        currentSortColumn = col;
+        sortDirectionAsc = true;
+      }
+      updateSortIndicators();
+      filterData();
+    }
+
+    function updateSortIndicators() {
+      const headers = document.querySelectorAll("#tasksTable th");
+      headers.forEach(th => {
+        th.classList.remove("sort-asc", "sort-desc");
+        if(th.getAttribute("data-column") === currentSortColumn){
+          th.classList.add(sortDirectionAsc ? "sort-asc" : "sort-desc");
+        }
+      });
+    }
+
+    function initialize() {
+      fetch('/getTasksData')
+        .then(res => res.json())
+        .then(data => {
+          if (!data || data.length === 0) {
+            console.warn('No data received from sheet');
+            renderTable([]);
+            return;
+          }
+          tasksData = data.data || [];
+          populateFreqOptions(tasksData);
+          filterData();
+          document.getElementById("searchTaskPlan").addEventListener("input", filterData);
+          document.getElementById("filterDoer").addEventListener("input", filterData);
+          document.getElementById("filterFreq").addEventListener("change", filterData);
+          document.getElementById("filterDate").addEventListener("change", filterData);
+          document.querySelectorAll("#tasksTable th").forEach(th => {
+            th.addEventListener("click", onHeaderClick);
+          });
+        })
+        .catch(error => {
+          console.error('Error fetching data:', error.message);
+          renderTable([]);
+        });
+    }
+
+    window.onload = initialize;
+  </script>
+</body>
+</html>
